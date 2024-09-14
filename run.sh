@@ -30,6 +30,10 @@ if [ ! -f ".env" ]; then
 else
 	echo "Skipping .env copying"
 fi
+
+git fetch
+git pull
+
 while true
 do
 	python3 main.py
