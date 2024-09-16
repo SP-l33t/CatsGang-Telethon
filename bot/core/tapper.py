@@ -159,38 +159,33 @@ class Tapper:
                     time_difference = next_day_3am - current_time
 
             if time_difference > timedelta(hours=24):
-                img_folder = 'bot/img'
-                image_files = [f for f in os.listdir(img_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-
-                if not image_files:
-                    logger.info(f"{self.session_name} | No image files found in the 'bot/img' folder")
+                response = await http_client.get(f"https://cataas.com/cat?timestamp={int(datetime.now().timestamp() * 1000)}", headers={
+                    "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                    "accept-language": "en-US,en;q=0.9,ru;q=0.8"
+                })
+                if not response and response.status not in [200, 201]:
+                    logger.error(f"{self.session_name} | Failed to fetch image from cataas.com")
                     return None
-
-                random_image = random.choice(image_files)
-                image_path = os.path.join(img_folder, random_image)
-
-                mime_type, _ = mimetypes.guess_type(image_path)
-                if not mime_type:
-                    mime_type = 'application/octet-stream'
+                
+                image_content = await response.read()
 
                 boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
                 form_data = (
                     f'--{boundary}\r\n'
-                    f'Content-Disposition: form-data; name="photo"; filename="{random_image}"\r\n'
-                    f'Content-Type: {mime_type}\r\n\r\n'
+                    f'Content-Disposition: form-data; name="photo"; filename="{uuid.uuid4().hex}.jpg"\r\n'
+                    f'Content-Type: image/jpeg\r\n\r\n'
                 ).encode('utf-8')
-
-                async with aiofiles.open(image_path, 'rb') as file:
-                    file_content = await file.read()
-                    form_data += file_content
-
+                
+                form_data += image_content
                 form_data += f'\r\n--{boundary}--\r\n'.encode('utf-8')
+
                 headers = http_client.headers.copy()
                 headers['Content-Type'] = f'multipart/form-data; boundary={boundary}'
-                response = await self.make_request(http_client, 'POST', endpoint="/user/avatar/upgrade", data=form_data,
-                                                   headers=headers)
-                avatar_info = await self.make_request(http_client, 'GET', endpoint="/user/avatar")
-                return response.get('rewards', 0)
+                response = await self.make_request(http_client, 'POST', endpoint="/user/avatar/upgrade", data=form_data, headers=headers)
+                if response:
+                    return response.get('rewards', 0)
+                else:
+                    return None
             else:
                 hours, remainder = divmod(time_difference.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
@@ -199,7 +194,7 @@ class Tapper:
                 return None
 
     async def join_and_mute_tg_channel(self, link: str):
-        path = link.replace("https://t.me/", "")
+        path = link.replace('https://t.me/', '')
         if path == 'money':
             return
 
