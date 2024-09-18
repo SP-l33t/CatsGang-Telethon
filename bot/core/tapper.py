@@ -118,7 +118,8 @@ class Tapper:
 
             if self.tg_client.is_connected():
                 await self.tg_client.disconnect()
-                self.lock.release()
+                if self.lock.acquired:
+                    self.lock.release()
 
             return ref_id, tg_web_data
 
@@ -221,7 +222,8 @@ class Tapper:
                     logger.info(self.log_message(f"Joined to channel: <y>{link}</y>"))
                 except Exception as e:
                     log_error(self.log_message(f"(Task) Error while join tg channel: {e}"))
-        self.lock.release()
+        if self.lock.acquired:
+            self.lock.release()
 
     @error_handler
     async def get_tasks(self, http_client):
@@ -337,5 +339,6 @@ async def run_tapper(tg_client: TelegramClient):
     except InvalidSession as e:
         logger.error(runner.log_message(f"Invalid Session: {e}"))
     finally:
-        runner.lock.release()
+        if runner.lock.acquired:
+            runner.lock.release()
 
