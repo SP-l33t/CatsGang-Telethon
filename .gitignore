@@ -166,8 +166,6 @@ logs/
 
 *.session
 
-user_agents.json
-
 *.json
 
 proxies.txt
