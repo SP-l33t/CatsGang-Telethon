@@ -133,7 +133,7 @@ class Tapper:
 
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
-        full_url = url or f"https://cats-backend-cxblew-prod.up.railway.app{endpoint or ''}"
+        full_url = url or f"https://api.catshouse.club{endpoint or ''}"
         response = await http_client.request(method, full_url, **kwargs)
         response.raise_for_status()
         return await response.json()
