@@ -3,6 +3,7 @@ aiohttp-proxy==0.1.2
 aiofiles==24.1.0
 aiocfscrape==1.0.0
 asyncio==3.4.3
+Brotli==1.1.0
 loguru~=0.7.2
 Telethon==1.36.0
 better-proxy==1.2.0
