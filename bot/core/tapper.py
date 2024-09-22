@@ -34,7 +34,8 @@ def error_handler(func: Callable):
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            log_error(e)
+            if settings.DEBUG_LOGGING:
+                log_error(e)
             await asyncio.sleep(1)
 
     return wrapper

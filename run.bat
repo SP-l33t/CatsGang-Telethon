@@ -1,4 +1,5 @@
 @echo off
+title CatsGang
 set firstRun=true
 
 if not exist venv (
