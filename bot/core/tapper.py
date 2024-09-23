@@ -273,7 +273,7 @@ class Tapper:
 
                 http_client.headers['Authorization'] = f"tma {init_data}"
 
-                user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
+                user_data = await self.login(http_client=http_client, ref_id=ref_id)
                 if not user_data:
                     logger.error(f"{self.session_name} | Failed to login")
                     await http_client.close()
