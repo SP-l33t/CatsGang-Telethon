@@ -36,7 +36,6 @@ headers = {
     'Sec-Fetch-Site': 'same-origin',
     'Sec-Fetch-Mode': 'cors',
     'Sec-Fetch-Dest': 'empty',
-    'Accept-Encoding': 'gzip, deflate, br, zstd',
     'Accept-Language': 'en-US,en;q=0.9',
     'Priority': 'u=1, i'
 }

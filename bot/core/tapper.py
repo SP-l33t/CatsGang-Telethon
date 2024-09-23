@@ -117,19 +117,18 @@ class Tapper:
 
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
-        full_url = url or f"https://api.catshouse.club{endpoint or ''}"
-        response = await http_client.request(method, full_url, **kwargs)
+        response = await http_client.request(method, url or f"https://api.catshouse.club{endpoint or ''}", **kwargs)
         response.raise_for_status()
         return await response.json()
 
     @error_handler
-    async def login(self, http_client, init_data, ref_id):
-        http_client.headers['Authorization'] = "tma " + init_data
+    async def login(self, http_client, ref_id):
         user = await self.make_request(http_client, 'GET', endpoint="/user")
         if not user:
+            logger.info(self.log_message(f"User not found. Registering..."))
             await self.make_request(http_client, 'POST', endpoint=f"/user/create?referral_code={ref_id}")
             await asyncio.sleep(2)
-            return await self.login(http_client, init_data, ref_id)
+            return await self.login(http_client, ref_id)
         return user
 
     @error_handler
@@ -271,6 +270,8 @@ class Tapper:
 
                     proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
                     http_client = aiohttp.ClientSession(headers=self.headers, connector=proxy_conn)
+
+                http_client.headers['Authorization'] = f"tma {init_data}"
 
                 user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
                 if not user_data:
