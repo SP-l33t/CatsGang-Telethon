@@ -262,6 +262,7 @@ class Tapper:
                 proxy_conn.close()
             return
 
+        token_expiration = 0
         while True:
             try:
                 if http_client.closed:
@@ -279,11 +280,16 @@ class Tapper:
                     await http_client.close()
                     if proxy_conn and not proxy_conn.closed:
                         proxy_conn.close()
+                    logger.info(f"{self.session_name} | Sleep <y>300s</y>")
+                    await asyncio.sleep(delay=300)
                     continue
 
                 logger.info(self.log_message(f"<y>Successfully logged in</y>"))
                 logger.info(self.log_message(
                     f"User ID: <y>{user_data.get('id')}</y> | Telegram Age: <y>{user_data.get('telegramAge')}</y> | Points: <y>{user_data.get('totalRewards')}</y>"))
+                UserHasOgPass = user_data.get('hasOgPass', False)
+                logger.info(f"{self.session_name} | User has OG Pass: <y>{UserHasOgPass}</y>")
+
                 data_task = await self.get_tasks(http_client=http_client)
                 if data_task is not None and data_task.get('tasks', {}):
                     for task in data_task.get('tasks'):
@@ -305,9 +311,11 @@ class Tapper:
                 else:
                     logger.warning(self.log_message(f" No tasks"))
 
-                reward = await self.send_cats(http_client=http_client)
-                if reward:
-                    logger.info(self.log_message(f"Reward from Avatar quest: <y>{reward}</y>"))
+                for _ in range(3 if UserHasOgPass else 1):
+                    reward = await self.send_cats(http_client=http_client)
+                    if reward:
+                        logger.info(self.log_message(f"Reward from Avatar quest: <y>{reward}</y>"))
+                    await asyncio.sleep(random.randint(5, 7))
 
                 await http_client.close()
                 if proxy_conn and not proxy_conn.closed:
