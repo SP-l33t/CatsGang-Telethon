@@ -261,6 +261,8 @@ class Tapper:
                     if not init_data:
                         raise InvalidSession('Failed to get webview URL')
 
+                    access_token_created_time = time()
+
                     http_client.headers['Authorization'] = f"tma {init_data}"
 
                     user_data = await self.login(http_client=http_client, ref_id=ref_id)
