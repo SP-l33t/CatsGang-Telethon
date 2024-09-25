@@ -126,8 +126,8 @@ class Tapper:
         if not user:
             logger.info(self.log_message(f"User not found. Registering..."))
             await self.make_request(http_client, 'POST', endpoint=f"/user/create?referral_code={ref_id}")
-            await asyncio.sleep(2)
-            return await self.login(http_client, ref_id)
+            await asyncio.sleep(5)
+            user = await self.make_request(http_client, 'GET', endpoint="/user")
         return user
 
     @error_handler
