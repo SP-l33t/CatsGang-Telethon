@@ -53,6 +53,11 @@ class Tapper:
 
         self._webview_data = None
 
+        if self.proxy:
+            proxy = Proxy.from_str(self.proxy)
+            proxy_dict = proxy_utils.to_telethon_proxy(proxy)
+            self.tg_client.set_proxy(proxy_dict)
+
     def log_message(self, message) -> str:
         return f"<light-yellow>{self.session_name}</light-yellow> | {message}"
 
@@ -65,35 +70,37 @@ class Tapper:
 
         return user_agent
 
+    async def initialize_webview_data(self):
+        if not self._webview_data:
+            while True:
+                try:
+                    peer = await self.tg_client.get_input_entity('catsgang_bot')
+                    input_bot_app = InputBotAppShortName(bot_id=peer, short_name="join")
+                    self._webview_data = {'peer': peer, 'app': input_bot_app}
+                    break
+                except FloodWaitError as fl:
+                    fls = fl.seconds
+
+                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fls}s"))
+                    await asyncio.sleep(fls + 3)
+
+                except (UnauthorizedError, AuthKeyUnregisteredError):
+                    raise InvalidSession(f"{self.session_name}: User is unauthorized")
+
+                except (UserDeactivatedError, UserDeactivatedBanError, PhoneNumberBannedError):
+                    raise InvalidSession(f"{self.session_name}: User is banned")
+
     async def get_tg_web_data(self) -> [str | None, str | None]:
-
-        if self.proxy:
-            proxy = Proxy.from_str(self.proxy)
-            proxy_dict = proxy_utils.to_telethon_proxy(proxy)
-        else:
-            proxy_dict = None
-        self.tg_client.set_proxy(proxy_dict)
-
         init_data = None, None
         with self.lock:
-            async with self.tg_client as client:
-                if not self._webview_data:
-                    while True:
-                        try:
-                            peer = await client.get_input_entity('catsgang_bot')
-                            input_bot_app = InputBotAppShortName(bot_id=peer, short_name="join")
-                            self._webview_data = {'peer': peer, 'app': input_bot_app}
-                            break
-                        except FloodWaitError as fl:
-                            fls = fl.seconds
-
-                            logger.warning(self.log_message(f"FloodWait {fl}"))
-                            logger.info(self.log_message(f"Sleep {fls}s"))
-                            await asyncio.sleep(fls + 3)
+            try:
+                if not self.tg_client.is_connected():
+                    await self.tg_client.connect()
+                await self.initialize_webview_data()
 
                 ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "LYfX1AbKvihNGhaOSssv2"
 
-                web_view = await client(messages.RequestAppWebViewRequest(
+                web_view = await self.tg_client(messages.RequestAppWebViewRequest(
                     **self._webview_data,
                     platform='android',
                     write_allowed=True,
@@ -104,10 +111,21 @@ class Tapper:
                 tg_web_data = unquote(
                     string=auth_url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0])
 
-                me = await client.get_me()
+                me = await self.tg_client.get_me()
                 self.tg_client_id = me.id
 
                 init_data = ref_id, tg_web_data
+
+            except InvalidSession:
+                raise
+
+            except Exception as error:
+                log_error(self.log_message(f"Unknown error during Authorization: {error}"))
+                await asyncio.sleep(delay=3)
+
+            finally:
+                if self.tg_client.is_connected():
+                    await self.tg_client.disconnect()
 
         return init_data
 
