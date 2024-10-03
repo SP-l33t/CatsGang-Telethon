@@ -331,7 +331,9 @@ class Tapper:
 
                             youtube_answers = [
                                 {'id': 141, 'answer': 'dildo'},
-                                {'id': 146, 'answer': 'dip'}
+                                {'id': 146, 'answer': 'dip'},
+                                {'id': 148, 'answer': 'AIRNODE'},
+                                {'id': 149, 'answer': 'WEI'},
                             ]
 
                             if task_type == 'SUBSCRIBE_TO_CHANNEL' and settings.CHANNEL_SUBSCRIBE_TASKS:
