@@ -237,6 +237,10 @@ class Tapper:
         return await self.make_request(http_client, 'GET', endpoint="/tasks/user", data={'group': 'cats'})
 
     @error_handler
+    async def check_available(self, http_client):
+        return await self.make_request(http_client, 'GET', endpoint="/exchange-claim/check-available")
+
+    @error_handler
     async def done_tasks(self, http_client, task_id, type_):
         return await self.make_request(http_client, 'POST', endpoint=f"/tasks/{task_id}/{type_}", json={})
 
@@ -256,7 +260,6 @@ class Tapper:
 
     @error_handler
     async def run(self) -> None:
-        await self.check_user_agent()
         if settings.USE_RANDOM_DELAY_IN_RUN:
             random_delay = random.randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
             logger.info(self.log_message(f"Bot will start in <y>{random_delay}s</y>"))
@@ -295,7 +298,7 @@ class Tapper:
                         await asyncio.sleep(delay=300)
                         continue
 
-                    logger.info(self.log_message(f"<y>Successfully logged in</y>"))
+                    logger.info(self.log_message(f"Successfully logged in "))
                     logger.info(self.log_message(
                         f"User ID: <y>{user_data.get('id')}</y> | Telegram Age: <y>{user_data.get('telegramAge')}</y> |"
                         f" Points: <y>{user_data.get('totalRewards')}</y>"))
@@ -310,17 +313,41 @@ class Tapper:
                                 continue
                             task_id = task.get('id')
                             task_type = task.get('type')
+
+                            if task_type in ['ACTIVITY_CHALLENGE', 'INVITE_FRIENDS', 'NICKNAME_CHANGE', 'TON_TRANSACTION',
+                                        'BOOST_CHANNEL']:
+                                continue
+
                             title = task.get('title')
                             reward = task.get('rewardPoints')
                             type_ = 'check' if task_type == 'SUBSCRIBE_TO_CHANNEL' else 'complete'
-                            if type_ == 'check':
-                                # TODO uncomment if they start checking channel subscription
-                                # await self.join_and_mute_tg_channel(link=task.get('params').get('channelUrl'))
+
+                            youtube_answers = [
+                                {'id': 141, 'answer': 'dildo'},
+                                {'id': 146, 'answer': 'dip'}
+                            ]
+                            # TODO
+                            if task_type == 'SUBSCRIBE_TO_CHANNEL':
+                                channel_link = task.get('params').get('channelUrl')
+                                if channel_link:
+                                    await self.join_and_mute_tg_channel(channel_link)
+                                else:
+                                    logger.warning(f"{self.session_name} | No channel link provided for task {id}")
                                 await asyncio.sleep(1)
+
+                            elif task_type == 'YOUTUBE_WATCH':
+                                answer = next((item['answer'] for item in youtube_answers if item['id'] == id), None)
+                                if answer:
+                                    type_ += f'?answer={answer}'
+                                    logger.info(f"{self.session_name} | Answer found for <y>'{title}'</y>: {answer}")
+                                else:
+                                    logger.info(f"{self.session_name} | Skipping task {id} - No answer available")
+                                    continue
+
                             done_task = await self.done_tasks(http_client=http_client, task_id=task_id, type_=type_)
                             if done_task and (done_task.get('success', False) or done_task.get('completed', False)):
                                 logger.info(self.log_message(f"Task <y>{title}</y> done! Reward: {reward}"))
-
+                            await asyncio.sleep(random.uniform(5, 7))
                     else:
                         logger.warning(self.log_message(f" No tasks"))
 
@@ -328,7 +355,13 @@ class Tapper:
                         reward = await self.send_cats(http_client=http_client)
                         if reward:
                             logger.info(self.log_message(f"Reward from Avatar quest: <y>{reward}</y>"))
-                        await asyncio.sleep(random.randint(5, 7))
+                        await asyncio.sleep(random.uniform(5, 7))
+
+                    if (await self.check_available(http_client=http_client) or {}).get('isAvailable', False):
+                        logger.info(f"{self.session_name} | Available withdrawal: <y>True</y>")
+                    else:
+                        logger.info(f"{self.session_name} | Available withdrawal: <r>False</r>")
+
 
                 except InvalidSession as error:
                     return
