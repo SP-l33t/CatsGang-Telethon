@@ -14,7 +14,7 @@ from time import time
 
 from telethon import TelegramClient
 from telethon.errors import *
-from telethon.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer
+from telethon.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer, InputUser
 from telethon.functions import messages, channels, account
 
 from .agents import generate_random_user_agent
@@ -42,39 +42,41 @@ class Tapper:
     def __init__(self, tg_client: TelegramClient):
         self.tg_client = tg_client
         self.session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
-        self.config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
-        self.proxy = self.config.get('proxy')
-        self.lock = AsyncInterProcessLock(os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files',  f"{self.session_name}.lock"))
-        self.tg_web_data = None
-        self.tg_client_id = 0
+        self.lock = AsyncInterProcessLock(
+            os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files',  f"{self.session_name}.lock"))
         self.headers = headers
 
-        self._webview_data = None
+        session_config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
 
+        if not all(key in session_config for key in ('api_id', 'api_hash', 'user_agent')):
+            logger.critical(self.log_message('CHECK accounts_config.json as it might be corrupted'))
+            exit(-1)
+
+        user_agent = session_config.get('user_agent')
+        self.headers['user-agent'] = user_agent
+        self.headers.update(**get_sec_ch_ua(user_agent))
+
+        self.proxy = session_config.get('proxy')
         if self.proxy:
             proxy = Proxy.from_str(self.proxy)
             proxy_dict = proxy_utils.to_telethon_proxy(proxy)
             self.tg_client.set_proxy(proxy_dict)
 
+        self.tg_web_data = None
+        self.tg_client_id = 0
+
+        self._webview_data = None
+
     def log_message(self, message) -> str:
         return f"<light-yellow>{self.session_name}</light-yellow> | {message}"
-
-    async def check_user_agent(self):
-        user_agent = self.config.get('user_agent')
-        if not user_agent:
-            user_agent = generate_random_user_agent()
-            self.config['user_agent'] = user_agent
-            await config_utils.update_session_config_in_file(self.session_name, self.config, CONFIG_PATH)
-
-        self.headers['User-Agent'] = user_agent
-        self.headers.update(**get_sec_ch_ua(user_agent))
 
     async def initialize_webview_data(self):
         if not self._webview_data:
             while True:
                 try:
                     peer = await self.tg_client.get_input_entity('catsgang_bot')
-                    input_bot_app = InputBotAppShortName(bot_id=peer, short_name="join")
+                    bot_id = InputUser(user_id=peer.user_id, access_hash=peer.access_hash)
+                    input_bot_app = InputBotAppShortName(bot_id=bot_id, short_name="join")
                     self._webview_data = {'peer': peer, 'app': input_bot_app}
                     break
                 except FloodWaitError as fl:
@@ -90,12 +92,17 @@ class Tapper:
                     raise InvalidSession(f"{self.session_name}: User is banned")
 
     async def get_tg_web_data(self) -> [str | None, str | None]:
+        if self.proxy and not self.tg_client._proxy:
+            logger.critical(self.log_message('Proxy found, but not passed to TelegramClient'))
+            exit(-1)
+
         init_data = None, None
         async with self.lock:
             try:
                 if not self.tg_client.is_connected():
                     await self.tg_client.connect()
                 await self.initialize_webview_data()
+                await asyncio.sleep(random.uniform(1, 2))
 
                 ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "LYfX1AbKvihNGhaOSssv2"
 
@@ -261,8 +268,8 @@ class Tapper:
     @error_handler
     async def run(self) -> None:
         if settings.USE_RANDOM_DELAY_IN_RUN:
-            random_delay = random.randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
-            logger.info(self.log_message(f"Bot will start in <y>{random_delay}s</y>"))
+            random_delay = random.uniform(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
+            logger.info(self.log_message(f"Bot will start in <y>{int(random_delay)}s</y>"))
             await asyncio.sleep(random_delay)
 
         access_token_created_time = 0
@@ -326,8 +333,8 @@ class Tapper:
                                 {'id': 141, 'answer': 'dildo'},
                                 {'id': 146, 'answer': 'dip'}
                             ]
-                            # TODO
-                            if task_type == 'SUBSCRIBE_TO_CHANNEL':
+
+                            if task_type == 'SUBSCRIBE_TO_CHANNEL' and settings.CHANNEL_SUBSCRIBE_TASKS:
                                 channel_link = task.get('params').get('channelUrl')
                                 if channel_link:
                                     await self.join_and_mute_tg_channel(channel_link)
@@ -339,9 +346,9 @@ class Tapper:
                                 answer = next((item['answer'] for item in youtube_answers if item['id'] == id), None)
                                 if answer:
                                     type_ += f'?answer={answer}'
-                                    logger.info(f"{self.session_name} | Answer found for <y>'{title}'</y>: {answer}")
+                                    logger.info(self.log_message(f"Answer found for <y>'{title}'</y>: {answer}"))
                                 else:
-                                    logger.info(f"{self.session_name} | Skipping task {id} - No answer available")
+                                    logger.info(self.log_message(f"Skipping task {id} - No answer available"))
                                     continue
 
                             done_task = await self.done_tasks(http_client=http_client, task_id=task_id, type_=type_)
@@ -358,10 +365,9 @@ class Tapper:
                         await asyncio.sleep(random.uniform(5, 7))
 
                     if (await self.check_available(http_client=http_client) or {}).get('isAvailable', False):
-                        logger.info(f"{self.session_name} | Available withdrawal: <y>True</y>")
+                        logger.info(self.log_message(f"Available withdrawal: <y>True</y>"))
                     else:
-                        logger.info(f"{self.session_name} | Available withdrawal: <r>False</r>")
-
+                        logger.info(self.log_message(f"Available withdrawal: <r>False</r>"))
 
                 except InvalidSession as error:
                     return

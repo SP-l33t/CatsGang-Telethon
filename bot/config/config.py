@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     GLOBAL_CONFIG_PATH: str = "TG_FARM"
    
     REF_ID: str = "LYfX1AbKvihNGhaOSssv2"
+
+    CHANNEL_SUBSCRIBE_TASKS: bool = True
+
     USE_RANDOM_DELAY_IN_RUN: bool = True
     RANDOM_DELAY_IN_RUN: list[int] = [0, 15]
     SLEEP_TIME: list[int] = [1800, 3600]
